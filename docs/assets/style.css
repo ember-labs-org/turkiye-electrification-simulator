@@ -112,7 +112,8 @@ footer [data-i18n="footDisclaimer"] { display: none !important; }
 
 /* Scrolling inside the Labs frame. The Labs page gives the iframe a fixed height and turns off
    the frame's own scrollbar, so this long page scrolls inside itself instead. Mouse wheel,
-   trackpad and touch all work, and scrolling stops at the ends rather than chaining to the
-   host page. */
+   trackpad and touch all work. When the tool reaches its end, scrolling carries on to the
+   Labs page around it (default overscroll behaviour), so the bottom of the frame and the
+   site footer can always be reached. */
 html { height: 100%; overflow: hidden; }
-body { height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+body { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
