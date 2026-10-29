@@ -109,3 +109,10 @@ footer [data-i18n="footDisclaimer"] { display: none !important; }
 /* Secondary button style for Reset (transparent, white 2px border). */
 .reset { background: none !important; border: 2px solid #FFFFFF !important; color: #FFFFFF !important; font-weight: 600; }
 .reset:hover { border-color: #FFC400 !important; color: #FFC400 !important; }
+
+/* Scrolling inside the Labs frame. The Labs page gives the iframe a fixed height and turns off
+   the frame's own scrollbar, so this long page scrolls inside itself instead. Mouse wheel,
+   trackpad and touch all work, and scrolling stops at the ends rather than chaining to the
+   host page. */
+html { height: 100%; overflow: hidden; }
+body { height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
