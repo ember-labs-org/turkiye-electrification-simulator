@@ -1,11 +1,12 @@
-# Ember Labs: alert when a GitHub Pages deployment fails (stopgap version)
+# Ember Labs: deployment log and failure alerts (stopgap version)
 # Save this file in each tool repo as .github/workflows/deploy-alert.yml
 #
-# Opens a GitHub issue labelled "deployment failed" with a link to the failed run.
-# People watching the repo get an email. No secrets needed.
-# If an alert issue is already open, it adds a comment instead of opening another.
+# Every successful GitHub Pages deployment adds a comment to a pinned
+# "Deployment log" issue: who pushed it, the commit message and a link.
+# A failed deployment opens an issue labelled "deployment failed".
+# People watching the repo get an email for both. No secrets needed.
 
-name: Deployment failure alert
+name: Deployment log and alerts
 
 on:
   # Runs when the built-in GitHub Pages workflow finishes.
@@ -13,24 +14,56 @@ on:
   workflow_run:
     workflows: ["pages build and deployment"]
     types: [completed]
-  # Lets you send a test alert from the Actions tab.
+  # Lets you send a test from the Actions tab.
   workflow_dispatch:
+    inputs:
+      test:
+        description: "What to test"
+        type: choice
+        options: ["success", "failure"]
+        default: "success"
 
 permissions:
   issues: write
 
 jobs:
-  alert:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+  log:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       REPO: ${{ github.event.repository.name }}
-      RUN_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+      OUTCOME: ${{ github.event_name == 'workflow_dispatch' && inputs.test || github.event.workflow_run.conclusion }}
       LABEL: ${{ github.event_name == 'workflow_dispatch' && 'TEST - ' || '' }}
+      RUN_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      PUSHED_BY: ${{ github.event.workflow_run.head_commit.author.name || github.actor }}
+      COMMIT_MSG: ${{ github.event.workflow_run.head_commit.message || 'Test run' }}
     steps:
-      - name: Open or update the alert issue
+      - name: Add to the deployment log
+        if: env.OUTCOME == 'success'
+        run: |
+          gh label create "deployment log" --color 0E8A16 \
+            --description "Automatic log of successful deployments" --force
+
+          LOG=$(gh issue list --label "deployment log" --state open --json number --jq '.[0].number')
+          if [ -z "$LOG" ]; then
+            URL=$(gh issue create --title "Deployment log: ${REPO}" --label "deployment log" \
+              --body "Each successful deployment of ${REPO} is added below as a comment. Keep this issue open.")
+            LOG=$(basename "$URL")
+            gh issue pin "$LOG" || true
+          fi
+
+          DATE=$(date -u +"%d-%m-%Y %H:%M UTC")
+          SUBJECT=$(printf '%s' "$COMMIT_MSG" | head -n 1)
+          COMMIT_URL="${GITHUB_SERVER_URL}/${GH_REPO}/commit/${SHA}"
+          gh issue comment "$LOG" --body "${LABEL}**Deployed ${DATE}**
+          Pushed by: ${PUSHED_BY}
+          Change: ${SUBJECT}
+          See the changes: ${COMMIT_URL}"
+
+      - name: Open or update the failure alert
+        if: env.OUTCOME == 'failure'
         run: |
           gh label create "deployment failed" --color D73A4A \
             --description "Automatic alert: a GitHub Pages deployment failed" --force
@@ -47,5 +80,7 @@ jobs:
             gh issue comment "$OPEN" --body "$BODY"
           else
             gh issue create --title "${LABEL}Deployment failed: ${REPO} (${DATE})" \
+              --label "deployment failed" --body "$BODY"
+          filed: ${REPO} (${DATE})" \
               --label "deployment failed" --body "$BODY"
           fi
