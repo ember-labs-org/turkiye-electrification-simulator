@@ -1,0 +1,51 @@
+# Ember Labs: alert when a GitHub Pages deployment fails (stopgap version)
+# Save this file in each tool repo as .github/workflows/deploy-alert.yml
+#
+# Opens a GitHub issue labelled "deployment failed" with a link to the failed run.
+# People watching the repo get an email. No secrets needed.
+# If an alert issue is already open, it adds a comment instead of opening another.
+
+name: Deployment failure alert
+
+on:
+  # Runs when the built-in GitHub Pages workflow finishes.
+  # If a repo deploys with its own workflow instead, add that workflow's name here.
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
+  # Lets you send a test alert from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  alert:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REPO: ${{ github.event.repository.name }}
+      RUN_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+      LABEL: ${{ github.event_name == 'workflow_dispatch' && 'TEST - ' || '' }}
+    steps:
+      - name: Open or update the alert issue
+        run: |
+          gh label create "deployment failed" --color D73A4A \
+            --description "Automatic alert: a GitHub Pages deployment failed" --force
+
+          DATE=$(date -u +%d-%m-%Y)
+          BODY="${LABEL}The GitHub Pages deployment for ${REPO} failed on ${DATE}.
+
+          Failed run: ${RUN_URL}
+
+          Log this in the Monday technical log, then close this issue once the tool is deploying again."
+
+          OPEN=$(gh issue list --label "deployment failed" --state open --json number --jq '.[0].number')
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --body "$BODY"
+          else
+            gh issue create --title "${LABEL}Deployment failed: ${REPO} (${DATE})" \
+              --label "deployment failed" --body "$BODY"
+          fi
